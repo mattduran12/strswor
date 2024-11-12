@@ -1,0 +1,64 @@
+*File directory for where you have the data saved 
+global delta [your code here]
+use "$delta\Census_LEOS_raw.dta", clear
+
+*** Create strata
+
+* Create agency type variable
+
+gen type = "Sheriff" if COLLAPSEDSAMPTYPE == 1
+replace type = "Local/County/Regional Police" if COLLAPSEDSAMPTYPE==3
+replace type = "Tribal" if COLLAPSEDSAMPTYPE == 90
+label variable type "Agency Type"
+drop if type=="" // 2,490 observations deleted
+
+* Create agency size variable
+
+drop if FTSWORN==0 // 183 observations deleted
+drop if FTSWORN==. // 1,163 observations deleted
+count // 14,104 local and state law enforcement agencies
+
+    gen size = "1 to 24" if (FTSWORN >=1 & FTSWORN <24)
+replace size = "25 to 49" if (FTSWORN >=24 & FTSWORN <49)
+replace size = "50 to 99" if (FTSWORN >=49 & FTSWORN <100)
+replace size = "100 or more" if (FTSWORN >=100)
+tab size
+
+* Count observations in each strata
+
+tabstat FTSWORN, stats(n mean sd) col(stats) by(size) format(%3.2f)
+di (8.54 * .10) + (390.23) + (33.55 * .10) + (67.79 * .10) // stratified population mean
+
+
+
+gen sample_id = .
+
+* Stratified sampling for each stratum
+
+* 1. For "1 to 24" officers, sample 10%
+sample 10 if size == "1 to 24"
+replace sample_id = 1 if size == "1 to 24" & _n <= r(N)
+
+* 2. For "25 to 49" officers, sample 10%
+sample 10 if size == "25 to 49"
+replace sample_id = 2 if size == "25 to 49" & _n <= r(N)
+
+* 3. For "50 to 99" officers, sample 10%
+sample 10 if size == "50 to 99"
+replace sample_id = 3 if size == "50 to 99" & _n <= r(N)
+
+* 4. For "100 or more" officers, sample 100%
+replace sample_id = 4 if size == "100 or more"
+
+
+* Check the number of observations sampled from each stratum
+tab size sample_id
+
+* Alternatively, you can manually count the number of selected observations for each size category
+bysort size: count if sample_id == 1
+bysort size: count if sample_id == 2
+bysort size: count if sample_id == 3
+bysort size: count if sample_id == 4
+
+tabstat FTSWORN, stats(n mean sd) col(stats) by(size) format(%3.2f)
+di (8.63 * .10) + (390.23) + (33.16 * .10) + (65.58 * .10) // stratified sample mean
